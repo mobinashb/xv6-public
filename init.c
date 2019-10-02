@@ -21,6 +21,7 @@ main(void)
 
   for(;;){
     printf(1, "init: starting sh\n");
+    printf(1, "Team: Amirhosein Morteza, Omid Bodaghi and  Mobina Shahbandeh\n");
     pid = fork();
     if(pid < 0){
       printf(1, "init: fork failed\n");
