@@ -2,7 +2,7 @@
 #include "user.h"
 #include "fcntl.h"
 
-char buf[512];
+char buf[2048];
 
 int
 main(int argc, char **argv)
@@ -45,6 +45,23 @@ main(int argc, char **argv)
             printf(2, "error cpt: failed to create file %s\n", out_buf);
             exit();
         }
+
+        int max = sizeof(buf);
+        int cc, i;
+        char c;
+        for(i=0; i+1 < max; ){
+            cc = read(in_fd, &c, 1);
+            if(cc < 1)
+                break;
+            buf[i++] = c;
+            if(c == '\n' || c == '\r')
+                break;
+        }
+        close(in_fd);
+        
+        if(write(out_fd, buf, i) != i)
+              printf(2, "error: write %s to %s failed\n", buf, out_buf);              
+        close(out_fd); 
     }
     exit();
 }
