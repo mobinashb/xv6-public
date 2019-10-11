@@ -24,6 +24,16 @@ static struct {
   int locking;
 } cons;
 
+#define INPUT_BUF 128
+struct {
+  char buf[INPUT_BUF];
+  uint r;  // Read index
+  uint w;  // Write index
+  uint e;  // Edit index
+} input;
+
+uint lengthOfCommand = 0;
+
 static void
 printint(int xx, int base, int sign)
 {
@@ -126,13 +136,16 @@ panic(char *s)
 //PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
+#define LEFT 0xE4
+#define RIGHT 0xE5
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 static void
 cgaputc(int c)
 {
   int pos;
-
+  int flag = 0; // flag = 0 is for printing space in terminal.
+  
   // Cursor position: col + 80*row.
   outb(CRTPORT, 14);
   pos = inb(CRTPORT+1) << 8;
@@ -143,7 +156,21 @@ cgaputc(int c)
     pos += 80 - pos%80;
   else if(c == BACKSPACE){
     if(pos > 0) --pos;
-  } else
+  }
+  else if(c == LEFT){ // come back to the current pos.
+    pos -= pos%80 - 2;
+    pos += input.e;
+    flag = 1;
+  }
+  else if(c == '}'){
+    pos -= pos%80 - 2 - lengthOfCommand; // go to end of command.
+    input.e = pos %80 - 2; // update input.e to pos as well
+  }
+  else if(c == '{'){
+      pos -= pos%80 - 2; // back to the first of command.
+      flag = 1 ;
+  }
+  else
     crt[pos++] = (c&0xff) | 0x0700;  // black on white
 
   if(pos < 0 || pos > 25*80)
@@ -159,7 +186,9 @@ cgaputc(int c)
   outb(CRTPORT+1, pos>>8);
   outb(CRTPORT, 15);
   outb(CRTPORT+1, pos);
-  crt[pos] = ' ' | 0x0700;
+  if(flag == 0){
+    crt[pos] = ' ' | 0x0700;
+  }
 }
 
 void
@@ -170,23 +199,16 @@ consputc(int c)
     for(;;)
       ;
   }
-
   if(c == BACKSPACE){
     uartputc('\b'); uartputc(' '); uartputc('\b');
-  } else
+  } 
+  else
     uartputc(c);
   cgaputc(c);
 }
 
-#define INPUT_BUF 128
-struct {
-  char buf[INPUT_BUF];
-  uint r;  // Read index
-  uint w;  // Write index
-  uint e;  // Edit index
-} input;
-
 #define C(x)  ((x)-'@')  // Control-x
+
 
 void
 consoleintr(int (*getc)(void))
@@ -201,23 +223,77 @@ consoleintr(int (*getc)(void))
       doprocdump = 1;
       break;
     case C('U'):  // Kill line.
+      lengthOfCommand = 0;
       while(input.e != input.w &&
             input.buf[(input.e-1) % INPUT_BUF] != '\n'){
         input.e--;
         consputc(BACKSPACE);
       }
       break;
-    case C('H'): case '\x7f':  // Backspace
-      if(input.e != input.w){
+    case C('C'):  // Kill line.
+      input.e = lengthOfCommand;
+      cgaputc('}');
+      lengthOfCommand = 0;
+      while(input.e != input.w &&
+            input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+        input.buf[(input.e-1) % INPUT_BUF] = '\000'; //erase buffer.
         input.e--;
         consputc(BACKSPACE);
       }
       break;
+    case C('H'): case '\x7f':  // Backspace
+      if(input.e != input.w){
+        if(lengthOfCommand > input.e){
+          uint i;
+          for (i=input.e - 1; i<lengthOfCommand; i++){ //shift buf left.
+            input.buf[i % INPUT_BUF] = input.buf[(i+1) % INPUT_BUF];
+          }
+          cgaputc(BACKSPACE);
+          input.e--;
+          for(i=input.e; i<lengthOfCommand - 1; i++){ // print shifted chars in the terminal.
+            consputc(input.buf[i]);
+          }
+          cgaputc(LEFT); // pos return to the correct pos.
+        }
+        else{
+          input.e--;
+          consputc(BACKSPACE);
+        }
+        lengthOfCommand--;
+      }
+      break;
+    case '}':
+      consputc('}');
+      break;
+    case '{':
+      ;
+      input.e = input.r; //input.r
+      consputc('{');
+      break;
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
-        input.buf[input.e++ % INPUT_BUF] = c;
-        consputc(c);
+        if (lengthOfCommand > input.e){ // we are not in the most right of command.
+          uint cur = input.e; // save cur pos
+          uint i;
+          for (i=lengthOfCommand; i>input.e; i--){ //shift buf right.
+            input.buf[i % INPUT_BUF] = input.buf[(i-1) % INPUT_BUF];
+          }
+          input.buf[input.e%INPUT_BUF] = c; // put the new char in the buffer
+          lengthOfCommand++;
+          input.e++;
+          for(i=cur; i<lengthOfCommand; i++){ // print shifted chars in the terminal.
+            consputc(input.buf[i]);
+          }
+          cgaputc(LEFT); // pos return to the correct pos.
+        }
+
+        else{
+          input.buf[input.e++ % INPUT_BUF] = c;
+          lengthOfCommand = input.e - lengthOfCommand == 1 ? input.e : lengthOfCommand; // change this.
+          consputc(c);
+        }
+        // consputc(c);
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
           input.w = input.e;
           wakeup(&input.r);
