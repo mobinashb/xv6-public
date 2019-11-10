@@ -123,3 +123,33 @@ sys_get_children_pid(void){
     return -1;
   return children(pid);
 }
+
+int
+sys_gettime(void)
+{
+  struct rtcdate r;
+  cmostime(&r);
+  cprintf("current time: %d:%d:%d\n", (&r)->hour, (&r)->minute, (&r)->second);
+  return r.second;
+}
+
+int
+sys_sleepsec(void)
+{
+  uint xticks = 0;
+  int secs;
+  uint startTime;
+  uint finishTime;
+  if (argint(0, &secs) < 0) {
+    return -1;
+  }
+  startTime = sys_uptime();
+  while (((int)xticks - (int)startTime) < secs*100)
+  {
+    acquire(&tickslock);
+    xticks = ticks;
+    release(&tickslock);
+  }
+  finishTime = sys_uptime();
+  return ((int)finishTime-(int)startTime)/100;
+}
