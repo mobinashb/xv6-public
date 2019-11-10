@@ -532,3 +532,27 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+int
+children(int pid)
+{
+  struct proc *p;
+  int pid_list = 0;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    // cprintf("proc pid: %d with parent pid: %d \n",  p->pid, p->parent->pid);
+    if(p->parent->pid == pid){
+      // cprintf("found child pid: %d \n",  p->pid);
+      pid_list = concatint(pid_list, p->pid);
+    }
+  }
+  release(&ptable.lock);
+  return pid_list;
+}
+
+int concatint(int x, int y) {
+    int pow = 10;
+    while(y >= pow)
+        pow *= 10;
+    return x * pow + y;        
+} 

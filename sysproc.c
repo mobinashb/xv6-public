@@ -115,3 +115,11 @@ int
 sys_get_parent_pid(void){
   return myproc()->parent->pid;
 }
+
+int
+sys_get_children_pid(void){
+  int pid;
+  if(argint(0, &pid) < 0)
+    return -1;
+  return children(pid);
+}
