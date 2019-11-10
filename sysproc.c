@@ -89,3 +89,24 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int 
+sys_count_number_of_digits(void)
+{
+  struct proc *curproc = myproc();
+  int num = curproc->tf->edx;
+  int counter = 0;
+  // cprintf("number passed by register : %d \n",  num);
+  if (num == 0)
+  {
+    counter++;
+  }else{
+    while(num != 0)
+    {
+      counter++;
+      num /= 10;
+    }
+  }
+  cprintf("number digits count : %d \n",  counter);
+  return 0;
+}
