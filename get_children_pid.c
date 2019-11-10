@@ -15,8 +15,10 @@ int main(int argc, char *argv[])
 		if (second_child_pid != 0)
 		{
 			int children_pids = get_children_pid(pid);
-			printf(1, "children pids: %d\n", children_pids);	
+			printf(1, "children pids: %d\n", children_pids);
+			wait();	
 		}
+		wait(); 
 	}
 	exit();
 }
