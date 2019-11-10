@@ -7,6 +7,40 @@
 #include "x86.h"
 #include "elf.h"
 
+#define MAXNUMPATH 10
+
+// keep all pathes in a 2d array
+char pathes[MAXNUMPATH][1024];
+
+// the file path
+char file_path[2048];
+
+int 
+sys_setPath(void){  
+  char* envPathInput;
+  if(argstr(0, &envPathInput) < 0)  return -1;
+
+  memset(pathes, 0, sizeof(file_path) / 2 * MAXNUMPATH);
+  //cprintf("%s wq", envPathInput);
+  int pathPos = 0;
+  int pathNum = 0;
+  int i = 0;
+  if (envPathInput[0] == 'P' && envPathInput[1] == 'A' && envPathInput[2] == 'T' && envPathInput[3] == 'H' && envPathInput[4] == ' '){
+    for(i = 5; i < strlen(envPathInput); i++){
+      if(envPathInput[i] == ':'){
+        pathes[pathNum++][pathPos] = '\0';
+        pathPos = 0;
+      }
+      else  pathes[pathNum][pathPos++] = envPathInput[i];
+    }
+    for(i = 0; i<10; i++){
+      cprintf("%s\n", pathes[i]);
+    }
+  }
+  else cprintf("please enter PATH variable\n");
+  return 0;
+}
+
 int
 exec(char *path, char **argv)
 {
@@ -17,20 +51,39 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
+  int length;
+  int found = 0;
   struct proc *curproc = myproc();
-
-  begin_op();
-
+  int n;
+  
   if((ip = namei(path)) == 0){
-    end_op();
-    cprintf("exec: fail\n");
-    return -1;
+    length = strlen(path);
+
+    for(i = 0; i < MAXNUMPATH && !found; i++){
+      memset(file_path, 0, sizeof(char) * 2048);
+
+      n = 0;
+
+      for(n=0; n < strlen(pathes[i]); n++)  file_path[n] = pathes[i][n];
+
+      for(n=0; n < length; n++) file_path[strlen(pathes[i]) + n] = path[n];
+
+      file_path[strlen(pathes[i]) + length] = '\0';
+
+      if((ip = namei(file_path)) != 0){
+        path = file_path;
+        found = 1;
+      }
+    }
+
+    if(!found)  return -1;
   }
+
   ilock(ip);
   pgdir = 0;
 
   // Check ELF header
-  if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
+  if(readi(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;
@@ -47,17 +100,13 @@ exec(char *path, char **argv)
       continue;
     if(ph.memsz < ph.filesz)
       goto bad;
-    if(ph.vaddr + ph.memsz < ph.vaddr)
-      goto bad;
     if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
-      goto bad;
-    if(ph.vaddr % PGSIZE != 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }
+
   iunlockput(ip);
-  end_op();
   ip = 0;
 
   // Allocate two pages at the next page boundary.
@@ -106,9 +155,7 @@ exec(char *path, char **argv)
  bad:
   if(pgdir)
     freevm(pgdir);
-  if(ip){
+  if(ip)
     iunlockput(ip);
-    end_op();
-  }
   return -1;
 }
