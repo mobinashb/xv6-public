@@ -6,14 +6,15 @@
 
 int main(int argc, char *argv[])
 {
-    // int pid = fork();
-	// if (pid == 0)
-	// {
-	// 	printf(1, "child proc gets parent id: %s\n", get_parent_pid());
-	// }else{
-	// 	printf(1, "parent proc gets parent id: %s\n", get_parent_pid());
-	// }
-   int ppid = get_parent_pid();
-   printf(1, "parent pid: %d\n", ppid);
+    int child_pid = fork();
+	if (child_pid == 0)
+	{
+		int pid = getpid();
+        int ppid = get_parent_pid();
+		printf(1, "child proc -> with pid: %d and parent pid: %d\n", pid, ppid);	
+	}else{
+		int pid = getpid();
+		printf(1, "parent proc -> with pid: %d and child pid: %d\n", pid, child_pid);	
+	}
    exit();
 }
